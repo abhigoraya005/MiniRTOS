@@ -1,0 +1,28 @@
+# Compiled executables
+*.exe
+*.out
+
+# Object files
+*.o
+*.obj
+
+# Debug files
+*.d
+*.elf
+*.map
+
+# Build directories
+build/
+bin/
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
