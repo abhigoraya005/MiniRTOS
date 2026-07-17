@@ -9,13 +9,13 @@
 ![Platform](https://img.shields.io/badge/Platform-Host%20Simulation-lightgrey)
 ![Architecture](https://img.shields.io/badge/Target-Cortex--M-green)
 ![Status](https://img.shields.io/badge/Status-In%20Development-orange)
-![Progress](https://img.shields.io/badge/Progress-Day%204%20of%2014-blue)
+![Progress](https://img.shields.io/badge/Progress-Day%205%20of%2014-blue)
 
 **MiniRTOS** is a lightweight Real-Time Operating System kernel and task scheduling simulator being developed from scratch in C to explore the internal concepts behind embedded RTOS architectures.
 
 The project is being developed through a structured **14-day development roadmap**.
 
-The current GitHub version has completed **Day 4**, covering kernel initialization, Task Control Blocks, dynamic task registration, task state representation, and cooperative Round-Robin task scheduling.
+The current GitHub version has completed **Day 5**, covering kernel initialization, Task Control Blocks, dynamic task registration, task state representation, cooperative Round-Robin task scheduling, and simulated System Tick management.
 
 </div>
 
@@ -43,6 +43,9 @@ The project currently demonstrates:
 - READY task selection
 - Automatic skipping of unavailable tasks
 - Multi-task execution simulation
+- Simulated System Tick
+- Kernel tick counter
+- Tick advancement during scheduler execution
 
 The current implementation runs as a **host-side simulation using GCC** while maintaining a modular architecture designed around embedded RTOS concepts.
 
@@ -56,17 +59,24 @@ The current implementation runs as a **host-side simulation using GCC** while ma
                             ▼
                          Kernel
                             │
-            ┌───────────────┴───────────────┐
-            │                               │
-            ▼                               ▼
-      Task Manager                      Scheduler
-            │                               │
-            │                               │
-            ├── Task Creation               ├── Round Robin
-            ├── Task Registration           ├── READY Task Selection
-            ├── Task Control Blocks         └── Task Execution
-            ├── Task States
-            └── Task Table
+          ┌─────────────────┼─────────────────┐
+          │                 │                 │
+          ▼                 ▼                 ▼
+    Task Manager        Scheduler         System Tick
+          │                 │                 │
+          │                 │                 ├── Tick Counter
+          │                 │                 ├── Tick Increment
+          │                 │                 └── Kernel Time Base
+          │                 │
+          │                 ├── Round Robin
+          │                 ├── READY Task Selection
+          │                 └── Task Execution
+          │
+          ├── Task Creation
+          ├── Task Registration
+          ├── Task Control Blocks
+          ├── Task States
+          └── Task Table
                             │
                             ▼
                      Demo Application
@@ -84,14 +94,18 @@ The current implementation runs as a **host-side simulation using GCC** while ma
 As development progresses, the architecture will be extended with:
 
 ```text
-System Tick
-    │
-Task Delays
-    │
+Task State Management
+        │
+        ▼
+Tick-Based Task Delays
+        │
+        ▼
 Priority Scheduler
-    │
+        │
+        ▼
 Context Manager
-    │
+        │
+        ▼
 IPC
 ├── Semaphore
 ├── Mutex
@@ -256,7 +270,7 @@ The task table provides visibility into the current state of the MiniRTOS task s
 
 # 🔁 Round-Robin Scheduler
 
-Day 4 introduces the first scheduling algorithm in MiniRTOS.
+Day 4 introduced the first scheduling algorithm in MiniRTOS.
 
 The current scheduler uses a cooperative **Round-Robin scheduling policy**.
 
@@ -288,6 +302,9 @@ A scheduler cycle performs the following operations:
 
 ```text
 Scheduler Cycle
+      │
+      ▼
+Increment System Tick
       │
       ▼
 Find Next Task
@@ -330,6 +347,67 @@ Task 4: Idle         READY       → Execute
 ```
 
 This provides the foundation for future task blocking, delays, synchronization, and IPC mechanisms.
+
+---
+
+# ⏱️ System Tick
+
+Day 5 introduces a simulated **System Tick** that provides a basic time reference for the MiniRTOS kernel.
+
+The System Tick module is initialized during system startup:
+
+```text
+[SYSTICK] System tick initialized.
+```
+
+During scheduler execution, the tick counter advances with each scheduling cycle.
+
+Example:
+
+```text
+[SCHEDULER] Cycle 1
+[TICK] 1
+
+[SCHEDULER] Cycle 2
+[TICK] 2
+
+[SCHEDULER] Cycle 3
+[TICK] 3
+
+[SCHEDULER] Cycle 4
+[TICK] 4
+```
+
+The current System Tick provides the kernel with a simulated time base.
+
+Conceptually:
+
+```text
+Scheduler Cycle
+      │
+      ▼
+Increment System Tick
+      │
+      ▼
+Update Kernel Time
+      │
+      ▼
+Select READY Task
+      │
+      ▼
+Execute Task
+```
+
+The kernel tick can be retrieved using the System Tick API.
+
+The System Tick provides the timing foundation required for upcoming MiniRTOS features such as:
+
+- Tick-based task delays
+- Automatic delayed-task wake-up
+- Time-based scheduling operations
+- Software timers
+
+At the current development stage, the System Tick is **simulated on the host system** and is not generated by a hardware SysTick interrupt.
 
 ---
 
@@ -394,7 +472,16 @@ The current MiniRTOS application follows this simulated execution sequence:
              Print Task Table
                     │
                     ▼
+           Initialize System Tick
+                    │
+                    ▼
            Initialize Scheduler
+                    │
+                    ▼
+              Scheduler Cycle
+                    │
+                    ▼
+            Increment Tick
                     │
                     ▼
           Round-Robin Scheduling
@@ -417,7 +504,7 @@ The current MiniRTOS application follows this simulated execution sequence:
 
 # 📂 Current Project Structure
 
-The public GitHub repository currently contains the components developed through Day 4.
+The public GitHub repository currently contains the components developed through Day 5.
 
 ```text
 MiniRTOS
@@ -428,7 +515,9 @@ MiniRTOS
 │   ├── task.c
 │   ├── task.h
 │   ├── scheduler.c
-│   └── scheduler.h
+│   ├── scheduler.h
+│   ├── systick.c
+│   └── systick.h
 │
 ├── Demo
 │   └── main.c
@@ -497,7 +586,7 @@ gcc --version
 From the project root directory:
 
 ```bash
-gcc -Wall -Wextra Demo/main.c Kernel/minirtos.c Kernel/task.c Kernel/scheduler.c -o MiniRTOS.exe
+gcc -Wall -Wextra Demo/main.c Kernel/minirtos.c Kernel/task.c Kernel/scheduler.c Kernel/systick.c -o MiniRTOS.exe
 ```
 
 Run on Windows PowerShell:
@@ -516,7 +605,7 @@ Run on Windows PowerShell:
 | Day 2 | Task Control Block foundation | ✅ Completed |
 | Day 3 | Dynamic task registration and task table | ✅ Completed |
 | Day 4 | Round-Robin scheduler | ✅ Completed |
-| Day 5 | System Tick integration | ⏳ Upcoming |
+| Day 5 | System Tick integration | ✅ Completed |
 | Day 6 | Task state management | ⏳ Upcoming |
 | Day 7 | Tick-based task delays and wake-up | ⏳ Upcoming |
 | Day 8 | Priority-based scheduling | ⏳ Upcoming |
@@ -527,7 +616,7 @@ Run on Windows PowerShell:
 | Day 13 | Full kernel and IPC integration | ⏳ Upcoming |
 | Day 14 | Unit testing, build setup and documentation | ⏳ Upcoming |
 
-> **Current Progress: Day 4 of 14 — Round-Robin Scheduler implemented.**
+> **Current Progress: Day 5 of 14 — System Tick integration completed.**
 
 ---
 
@@ -539,7 +628,7 @@ Task Control Blocks          ██████████ 100%  ✅
 Task Registration            ██████████ 100%  ✅
 Task Table                   ██████████ 100%  ✅
 Round-Robin Scheduling       ██████████ 100%  ✅
-System Tick                  ░░░░░░░░░░   0%  ⏳
+System Tick                  ██████████ 100%  ✅
 Task State Management        ░░░░░░░░░░   0%  ⏳
 Task Delays                  ░░░░░░░░░░   0%  ⏳
 Priority Scheduling          ░░░░░░░░░░   0%  ⏳
@@ -551,7 +640,7 @@ Integration Demo             ░░░░░░░░░░   0%  ⏳
 Unit Testing                 ░░░░░░░░░░   0%  ⏳
 ```
 
-**Development Roadmap: 4 / 14 Days Completed**
+**Development Roadmap: 5 / 14 Days Completed**
 
 ---
 
@@ -559,7 +648,6 @@ Unit Testing                 ░░░░░░░░░░   0%  ⏳
 
 The following features are planned for upcoming development stages:
 
-- System Tick integration
 - Task state management
 - Task suspension and resumption
 - Task blocking and unblocking
@@ -582,7 +670,7 @@ The following features are planned for upcoming development stages:
 
 MiniRTOS is currently an educational **host-side RTOS kernel simulation**.
 
-At the current Day 4 development stage, it does not yet implement:
+At the current Day 5 development stage, it does not yet implement:
 
 - Hardware-based context switching
 - ARM Cortex-M register save/restore
@@ -590,6 +678,7 @@ At the current Day 4 development stage, it does not yet implement:
 - Hardware SysTick interrupts
 - Preemptive multitasking
 - Per-task hardware stacks
+- Tick-based task blocking
 - Semaphore synchronization
 - Mutex synchronization
 - Message queues
@@ -597,7 +686,7 @@ At the current Day 4 development stage, it does not yet implement:
 - Priority inheritance
 - Dynamic memory management
 
-The current scheduler is a cooperative host-side simulation intended to demonstrate fundamental task scheduling concepts.
+The current scheduler and System Tick are host-side simulations intended to demonstrate fundamental RTOS scheduling and timing concepts.
 
 ---
 
@@ -639,7 +728,7 @@ This would transform the current educational scheduler simulation into a more ha
 
 # 🎯 Learning Outcomes
 
-Through the first four development stages, the following concepts have been explored:
+Through the first five development stages, the following concepts have been explored:
 
 - RTOS kernel architecture
 - Modular C project organization
@@ -653,10 +742,13 @@ Through the first four development stages, the following concepts have been expl
 - Cooperative scheduling
 - Round-Robin scheduling
 - Scheduler task selection
+- System Tick architecture
+- Kernel tick management
+- Simulated kernel time base
 - Embedded software abstraction
 - GCC-based C development
 
-Future development will expand these learning outcomes into synchronization, inter-task communication, system timing, and context management.
+Future development will expand these learning outcomes into task state management, task delays, synchronization, inter-task communication, priority scheduling, and context management.
 
 ---
 
@@ -664,7 +756,9 @@ Future development will expand these learning outcomes into synchronization, int
 
 MiniRTOS is designed as an educational implementation for understanding RTOS internals.
 
-The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management and scheduling but does not currently perform hardware-level context switching on an ARM Cortex-M processor.
+The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management, scheduling, and kernel timing but does not currently perform hardware-level context switching on an ARM Cortex-M processor.
+
+The System Tick implementation is currently simulated in software and advances during scheduler execution rather than being generated by a physical hardware timer interrupt.
 
 Future development stages will introduce additional RTOS concepts while maintaining a modular architecture suitable for exploring a potential Cortex-M port.
 
@@ -702,6 +796,6 @@ The project follows a structured 14-day development roadmap, progressively intro
 
 **Building RTOS concepts from scratch in C — one subsystem at a time.**
 
-### Current Progress: Day 4 / 14 ✅
+### Current Progress: Day 5 / 14 ✅
 
 </div>
