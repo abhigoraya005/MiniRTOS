@@ -9,13 +9,13 @@
 ![Platform](https://img.shields.io/badge/Platform-Host%20Simulation-lightgrey)
 ![Architecture](https://img.shields.io/badge/Target-Cortex--M-green)
 ![Status](https://img.shields.io/badge/Status-In%20Development-orange)
-![Progress](https://img.shields.io/badge/Progress-Day%206%20of%2014-blue)
+![Progress](https://img.shields.io/badge/Progress-Day%208%20of%2014-blue)
 
 **MiniRTOS** is a lightweight Real-Time Operating System kernel and task scheduling simulator being developed from scratch in C to explore the internal concepts behind embedded RTOS architectures.
 
 The project is being developed through a structured **14-day development roadmap**.
 
-The current GitHub version has completed **Day 6**, covering kernel initialization, Task Control Blocks, dynamic task registration, Round-Robin scheduling, simulated System Tick management, and task state management with blocking, unblocking, suspension, and resumption.
+The current GitHub version has completed **Day 8**, covering kernel initialization, Task Control Blocks, dynamic task registration, Round-Robin scheduling, simulated System Tick management, task state management, tick-based task delays, automatic task wake-up, and priority-based scheduling.
 
 </div>
 
@@ -40,13 +40,18 @@ The project currently demonstrates:
 - Task state representation
 - Task table visualization
 - Cooperative Round-Robin scheduling
+- Priority-based scheduling
+- Runtime scheduler policy selection
 - READY task selection
 - Automatic skipping of unavailable tasks
 - Simulated System Tick
 - Kernel tick counter
 - Task blocking and unblocking
 - Task suspension and resumption
+- Tick-based task delays
+- Automatic delayed-task wake-up
 - Scheduler interaction with task states
+- Priority-aware task selection
 
 The current implementation runs as a **host-side simulation using GCC** while maintaining a modular architecture designed around embedded RTOS concepts.
 
@@ -70,16 +75,19 @@ The current implementation runs as a **host-side simulation using GCC** while ma
           │                 │                 └── Kernel Time Base
           │                 │
           │                 ├── Round Robin
+          │                 ├── Priority Scheduling
+          │                 ├── Scheduler Policy
           │                 ├── READY Task Selection
-          │                 ├── Skip BLOCKED Tasks
-          │                 └── Skip SUSPENDED Tasks
+          │                 └── State-Aware Selection
           │
           ├── Task Creation
           ├── Task Registration
           ├── Task Control Blocks
           ├── Task States
           ├── Block / Unblock
-          └── Suspend / Resume
+          ├── Suspend / Resume
+          ├── Tick-Based Delay
+          └── Automatic Wake-Up
                             │
                             ▼
                      Demo Application
@@ -97,22 +105,22 @@ The current implementation runs as a **host-side simulation using GCC** while ma
 As development progresses, the architecture will be extended with:
 
 ```text
-Tick-Based Task Delays
-        │
-        ▼
-Automatic Task Wake-Up
-        │
-        ▼
-Priority Scheduler
-        │
-        ▼
 Context Manager
-        │
-        ▼
+      │
+      ▼
+Cortex-M Port Layer
+      │
+      ▼
 IPC
 ├── Semaphore
 ├── Mutex
 └── Message Queue
+      │
+      ▼
+Full System Integration
+      │
+      ▼
+Unit Testing
 ```
 
 ---
@@ -141,7 +149,7 @@ The kernel initialization layer serves as the foundation for additional RTOS com
 
 MiniRTOS implements a Task Control Block structure for representing individual tasks.
 
-Each task contains information such as:
+Each task contains information required by the kernel and scheduler, including:
 
 ```text
 Task ID
@@ -150,9 +158,10 @@ Priority
 Task State
 Task Function
 Stack Pointer
+Timing Information
 ```
 
-The TCB architecture provides the foundation for task management and scheduling.
+The TCB architecture provides the foundation for task management, scheduling, and delayed task execution.
 
 ---
 
@@ -254,9 +263,9 @@ The task table provides visibility into the current state of the MiniRTOS task s
 
 # 🔁 Round-Robin Scheduler
 
-MiniRTOS currently implements a cooperative **Round-Robin scheduling policy**.
+MiniRTOS implements a cooperative **Round-Robin scheduling policy**.
 
-Tasks are selected sequentially:
+When all tasks are READY, tasks are selected sequentially:
 
 ```text
 Sensor
@@ -278,42 +287,112 @@ After reaching the final task, the scheduler returns to the first eligible task.
 
 The scheduler only selects tasks that are currently in the `READY` state.
 
+Tasks that are `BLOCKED` or `SUSPENDED` are automatically skipped.
+
 ---
 
-## Scheduler Execution
+# 🎯 Priority-Based Scheduler
 
-A scheduler cycle performs the following operations:
+Day 8 introduces a **Priority-Based Scheduling policy**.
+
+MiniRTOS can now select the highest-priority task from the set of READY tasks.
+
+Example task priorities:
 
 ```text
-Scheduler Cycle
-      │
-      ▼
-Increment System Tick
-      │
-      ▼
-Find Next Task
-      │
-      ▼
-Check Task State
-      │
-      ├── BLOCKED ─────► Skip
-      │
-      ├── SUSPENDED ───► Skip
-      │
-      ▼
-Task READY
-      │
-      ▼
-Mark RUNNING
-      │
-      ▼
-Execute Task Function
-      │
-      ▼
-Return Task to READY
+Sensor       Priority 3
+Processing   Priority 2
+Logger       Priority 1
+Idle         Priority 0
 ```
 
-This provides a basic cooperative task scheduling simulation with task-state awareness.
+When Priority-Based Scheduling is enabled:
+
+```text
+READY Tasks
+     │
+     ▼
+Find Highest Priority
+     │
+     ▼
+Sensor - Priority 3
+     │
+     ▼
+Execute Sensor Task
+```
+
+In the current cooperative simulation, if the highest-priority task remains READY after execution, it can be selected again during the next scheduling cycle.
+
+Example output:
+
+```text
+[DAY 8 TEST] Enabling Priority-Based Scheduler...
+[SCHEDULER] Policy changed to PRIORITY.
+
+[SCHEDULER] Cycle 1
+[TICK] 1
+[SCHEDULER] Running Task 1: Sensor (Priority 3)
+
+[SCHEDULER] Cycle 2
+[TICK] 2
+[SCHEDULER] Running Task 1: Sensor (Priority 3)
+
+[SCHEDULER] Cycle 3
+[TICK] 3
+[SCHEDULER] Running Task 1: Sensor (Priority 3)
+
+[SCHEDULER] Cycle 4
+[TICK] 4
+[SCHEDULER] Running Task 1: Sensor (Priority 3)
+```
+
+This demonstrates strict priority selection among READY tasks.
+
+---
+
+# 🔀 Scheduler Policies
+
+MiniRTOS currently supports two scheduling policies:
+
+```text
+MINIRTOS_SCHEDULER_ROUND_ROBIN
+MINIRTOS_SCHEDULER_PRIORITY
+```
+
+The scheduling policy can be selected through the scheduler interface.
+
+Example:
+
+```c
+MiniRTOS_SchedulerSetPolicy(
+    MINIRTOS_SCHEDULER_PRIORITY
+);
+```
+
+Conceptually:
+
+```text
+                 Scheduler
+                     │
+                     ▼
+              Check Policy
+                     │
+          ┌──────────┴──────────┐
+          │                     │
+          ▼                     ▼
+     ROUND ROBIN             PRIORITY
+          │                     │
+          ▼                     ▼
+ Select Next READY      Find Highest Priority
+       Task                  READY Task
+          │                     │
+          └──────────┬──────────┘
+                     │
+                     ▼
+                 Run Task
+```
+
+This architecture allows MiniRTOS to support multiple scheduling strategies through a common scheduler interface.
 
 ---
 
@@ -351,7 +430,7 @@ Scheduler Cycle
 Increment System Tick
       │
       ▼
-Update Kernel Time
+Update Delayed Tasks
       │
       ▼
 Select READY Task
@@ -360,7 +439,7 @@ Select READY Task
 Execute Task
 ```
 
-The System Tick provides the timing foundation required for upcoming tick-based task delays and automatic task wake-up.
+The System Tick now provides the time base used by the delayed-task mechanism.
 
 At the current development stage, the System Tick is **simulated on the host system** and is not generated by a hardware SysTick interrupt.
 
@@ -368,7 +447,7 @@ At the current development stage, the System Tick is **simulated on the host sys
 
 # 🚦 Task State Management
 
-Day 6 introduces explicit **Task State Management** to MiniRTOS.
+Day 6 introduced explicit **Task State Management** to MiniRTOS.
 
 Each task can exist in one of several states:
 
@@ -430,25 +509,9 @@ Priority      : 2
 State         : BLOCKED
 ```
 
-A blocked task is automatically skipped by the scheduler.
+Blocked tasks are skipped by the scheduler.
 
-Conceptually:
-
-```text
-Processing Task
-      │
-      ▼
-BLOCKED
-      │
-      ▼
-Scheduler Skips Task
-      │
-      ▼
-UNBLOCK
-      │
-      ▼
-READY
-```
+A task may be manually blocked or temporarily blocked as part of the tick-based delay mechanism.
 
 ---
 
@@ -467,29 +530,11 @@ State         : SUSPENDED
 
 Suspended tasks are not selected by the scheduler until explicitly resumed.
 
-Conceptually:
-
-```text
-Logger Task
-     │
-     ▼
-SUSPENDED
-     │
-     ▼
-Scheduler Skips Task
-     │
-     ▼
-RESUME
-     │
-     ▼
-READY
-```
-
 ---
 
 # 🔄 Task State Operations
 
-Day 6 introduces task management operations for controlling task execution.
+MiniRTOS supports task management operations for controlling task execution.
 
 Supported operations include:
 
@@ -498,9 +543,11 @@ Block Task
 Unblock Task
 Suspend Task
 Resume Task
+Delay Task
+Automatic Wake-Up
 ```
 
-Example API usage:
+Example:
 
 ```c
 MiniRTOS_BlockTask(2);
@@ -508,128 +555,200 @@ MiniRTOS_BlockTask(2);
 MiniRTOS_SuspendTask(3);
 ```
 
-This changes the Processing and Logger tasks:
+This changes the task states:
 
 ```text
 Processing  → BLOCKED
 Logger      → SUSPENDED
 ```
 
-The scheduler then executes only eligible READY tasks:
-
-```text
-Sensor
-  │
-  ▼
-Idle
-  │
-  ▼
-Sensor
-  │
-  ▼
-Idle
-```
-
-The blocked and suspended tasks are skipped.
+The scheduler automatically skips these tasks until they become READY again.
 
 ---
 
-## Restoring Task States
+# ⏳ Tick-Based Task Delays
 
-Tasks can later be restored to the `READY` state.
+Day 7 introduces **Tick-Based Task Delays**.
 
-Example:
+A task can be temporarily blocked for a specified number of kernel ticks.
 
-```c
-MiniRTOS_UnblockTask(2);
-
-MiniRTOS_ResumeTask(3);
-```
-
-The task states become:
+Conceptually:
 
 ```text
-Sensor       READY
-Processing   READY
-Logger       READY
-Idle         READY
+Task READY
+    │
+    ▼
+Delay Requested
+    │
+    ▼
+Calculate Wake Tick
+    │
+    ▼
+Task BLOCKED
+    │
+    ▼
+Kernel Tick Advances
+    │
+    ▼
+Wake Tick Reached?
+    │
+    ├── NO ──► Remain BLOCKED
+    │
+    └── YES
+         │
+         ▼
+      Task READY
 ```
 
-The scheduler can then execute all four tasks again:
+This provides the foundation for RTOS-style timing and periodic task execution.
+
+---
+
+# ⏰ Automatic Task Wake-Up
+
+The scheduler checks delayed tasks as the System Tick advances.
+
+For example, if the Processing task is delayed until Tick 4:
 
 ```text
-Sensor
-   │
-   ▼
+[TASK MANAGER] Task 2 (Processing) delayed until Tick 4.
+```
+
+Its state becomes:
+
+```text
+Task ID       : 2
+Task Name     : Processing
+State         : BLOCKED
+```
+
+During scheduling:
+
+```text
+Tick 1 → Processing BLOCKED
+Tick 2 → Processing BLOCKED
+Tick 3 → Processing BLOCKED
+Tick 4 → Processing wakes up
+```
+
+Example output:
+
+```text
+[SCHEDULER] Cycle 4
+[TICK] 4
+[TASK MANAGER] Task 2 (Processing) woke up at Tick 4.
+```
+
+The task is then returned to the `READY` state and becomes eligible for scheduling.
+
+Conceptually:
+
+```text
 Processing
-   │
-   ▼
-Logger
-   │
-   ▼
-Idle
+    │
+    ▼
+BLOCKED Until Tick 4
+    │
+    ▼
+Tick 1
+    │
+    ▼
+Tick 2
+    │
+    ▼
+Tick 3
+    │
+    ▼
+Tick 4
+    │
+    ▼
+Automatic Wake-Up
+    │
+    ▼
+READY
+    │
+    ▼
+Scheduler Can Execute Task
 ```
 
 ---
 
-# 🧪 Day 6 Task State Test
+# 🧪 Day 7 Delay Test
 
-The Day 6 demo demonstrates the interaction between the Task Manager and the Round-Robin scheduler.
+The Day 7 demo delays the Processing task until Tick 4.
 
 Initial state:
 
 ```text
 Sensor       READY
-Processing   READY
+Processing   BLOCKED
 Logger       READY
 Idle         READY
 ```
 
-Task states are then modified:
+The first scheduler cycles execute:
 
 ```text
-[DAY 6 TEST] Changing task states...
-
-[TASK MANAGER] Task 3 (Logger) state changed to SUSPENDED.
-[TASK MANAGER] Task 2 (Processing) state changed to BLOCKED.
+Tick 1 → Sensor
+Tick 2 → Logger
+Tick 3 → Idle
 ```
 
-The scheduler now executes:
+At Tick 4:
 
 ```text
-Sensor
-Idle
-Sensor
-Idle
-Sensor
-Idle
-Sensor
-Idle
+[TASK MANAGER] Task 2 (Processing) woke up at Tick 4.
 ```
 
-After restoring the tasks:
+Processing returns to READY and is subsequently selected by the scheduler.
+
+This demonstrates integration between:
 
 ```text
-[DAY 6 TEST] Restoring task states...
-
-[TASK MANAGER] Task 2 (Processing) state changed to READY.
-[TASK MANAGER] Task 3 (Logger) state changed to READY.
+System Tick
+    +
+Task Manager
+    +
+Task States
+    +
+Scheduler
 ```
 
-The scheduler returns to normal Round-Robin execution:
+---
+
+# 🧪 Day 8 Priority Scheduler Test
+
+Day 8 tests the new Priority-Based Scheduling policy.
+
+The registered tasks have priorities:
 
 ```text
-Sensor
-Processing
-Logger
-Idle
-Sensor
-Processing
-Logger
-Idle
+Sensor       3
+Processing   2
+Logger       1
+Idle         0
 ```
 
-This demonstrates that the scheduler correctly respects task states when selecting tasks for execution.
+The scheduler is switched to priority mode:
+
+```c
+MiniRTOS_SchedulerSetPolicy(
+    MINIRTOS_SCHEDULER_PRIORITY
+);
+```
+
+The highest-priority READY task is Sensor.
+
+The scheduler therefore executes:
+
+```text
+Cycle 1 → Sensor
+Cycle 2 → Sensor
+Cycle 3 → Sensor
+Cycle 4 → Sensor
+```
+
+This demonstrates that the scheduler correctly identifies and executes the highest-priority READY task.
 
 ---
 
@@ -643,7 +762,11 @@ The MiniRTOS demo application contains four simulated tasks.
 [TASK] Reading simulated sensor data.
 ```
 
-Represents a task responsible for collecting simulated sensor data.
+Priority:
+
+```text
+3
+```
 
 ---
 
@@ -653,7 +776,11 @@ Represents a task responsible for collecting simulated sensor data.
 [TASK] Processing simulated data.
 ```
 
-Represents a task responsible for processing sensor information.
+Priority:
+
+```text
+2
+```
 
 ---
 
@@ -663,7 +790,11 @@ Represents a task responsible for processing sensor information.
 [TASK] Logging system information.
 ```
 
-Represents a task responsible for recording system information.
+Priority:
+
+```text
+1
+```
 
 ---
 
@@ -673,62 +804,66 @@ Represents a task responsible for recording system information.
 [TASK] CPU Idle.
 ```
 
-Represents an idle execution path.
+Priority:
+
+```text
+0
+```
 
 ---
 
 # 🔄 Current System Flow
 
 ```text
-              MiniRTOS Kernel
-                    │
-                    ▼
-              Task Manager
-                    │
-                    ▼
-            Register 4 Tasks
-                    │
-                    ▼
-             Print Task Table
-                    │
-                    ▼
-           Initialize System Tick
-                    │
-                    ▼
-          Modify Task States
-                    │
-          ┌─────────┴─────────┐
-          │                   │
-          ▼                   ▼
-      Processing            Logger
-       BLOCKED             SUSPENDED
-          │                   │
-          └─────────┬─────────┘
-                    │
-                    ▼
-           Initialize Scheduler
-                    │
-                    ▼
-            Increment Tick
-                    │
-                    ▼
-          Round-Robin Selection
-                    │
-                    ▼
-           Execute READY Tasks
-                    │
-                    ▼
-          Restore Task States
-                    │
-                    ▼
-         All Tasks Return READY
+                 MiniRTOS Kernel
+                       │
+                       ▼
+                 Task Manager
+                       │
+                       ▼
+                Register Tasks
+                       │
+                       ▼
+                 System Tick
+                       │
+                       ▼
+             Update Delayed Tasks
+                       │
+                       ▼
+              Automatic Wake-Up
+                       │
+                       ▼
+                  Scheduler
+                       │
+                       ▼
+              Check Scheduler Policy
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+             ▼                   ▼
+        Round Robin           Priority
+             │                   │
+             ▼                   ▼
+       Next READY Task    Highest-Priority
+                              READY Task
+             │                   │
+             └─────────┬─────────┘
+                       │
+                       ▼
+                  Task RUNNING
+                       │
+                       ▼
+               Execute Function
+                       │
+                       ▼
+                   Task READY
 ```
 
 ---
 
 # 📂 Current Project Structure
 
-The public GitHub repository currently contains the components developed through Day 6.
+The public GitHub repository currently contains the components developed through Day 8.
 
 ```text
 MiniRTOS
@@ -746,6 +881,8 @@ MiniRTOS
 ├── Demo
 │   └── main.c
 │
+├── DAY7.md
+├── DAY8.md
 ├── .gitignore
 └── README.md
 ```
@@ -831,8 +968,8 @@ Run on Windows PowerShell:
 | Day 4 | Round-Robin scheduler | ✅ Completed |
 | Day 5 | System Tick integration | ✅ Completed |
 | Day 6 | Task state management | ✅ Completed |
-| Day 7 | Tick-based task delays and wake-up | ⏳ Upcoming |
-| Day 8 | Priority-based scheduling | ⏳ Upcoming |
+| Day 7 | Tick-based task delays and automatic wake-up | ✅ Completed |
+| Day 8 | Priority-based scheduling | ✅ Completed |
 | Day 9 | Context management simulation | ⏳ Upcoming |
 | Day 10 | Semaphore implementation | ⏳ Upcoming |
 | Day 11 | Mutex implementation | ⏳ Upcoming |
@@ -840,7 +977,7 @@ Run on Windows PowerShell:
 | Day 13 | Full kernel and IPC integration | ⏳ Upcoming |
 | Day 14 | Unit testing, build setup and documentation | ⏳ Upcoming |
 
-> **Current Progress: Day 6 of 14 — Task State Management implemented.**
+> **Current Progress: Day 8 of 14 — Priority-Based Scheduling implemented.**
 
 ---
 
@@ -854,8 +991,9 @@ Task Table                   ██████████ 100%  ✅
 Round-Robin Scheduling       ██████████ 100%  ✅
 System Tick                  ██████████ 100%  ✅
 Task State Management        ██████████ 100%  ✅
-Task Delays                  ░░░░░░░░░░   0%  ⏳
-Priority Scheduling          ░░░░░░░░░░   0%  ⏳
+Task Delays                  ██████████ 100%  ✅
+Automatic Task Wake-Up       ██████████ 100%  ✅
+Priority Scheduling          ██████████ 100%  ✅
 Context Simulation           ░░░░░░░░░░   0%  ⏳
 Semaphore                    ░░░░░░░░░░   0%  ⏳
 Mutex                        ░░░░░░░░░░   0%  ⏳
@@ -864,7 +1002,7 @@ Integration Demo             ░░░░░░░░░░   0%  ⏳
 Unit Testing                 ░░░░░░░░░░   0%  ⏳
 ```
 
-**Development Roadmap: 6 / 14 Days Completed**
+**Development Roadmap: 8 / 14 Days Completed**
 
 ---
 
@@ -872,9 +1010,6 @@ Unit Testing                 ░░░░░░░░░░   0%  ⏳
 
 The following features are planned for upcoming development stages:
 
-- Tick-based task delays
-- Automatic delayed-task wake-up
-- Priority-based scheduling
 - Context management simulation
 - Cortex-M-oriented port layer
 - Semaphore synchronization
@@ -891,7 +1026,7 @@ The following features are planned for upcoming development stages:
 
 MiniRTOS is currently an educational **host-side RTOS kernel simulation**.
 
-At the current Day 6 development stage, it does not yet implement:
+At the current Day 8 development stage, it does not yet implement:
 
 - Hardware-based context switching
 - ARM Cortex-M register save/restore
@@ -899,8 +1034,6 @@ At the current Day 6 development stage, it does not yet implement:
 - Hardware SysTick interrupts
 - Preemptive multitasking
 - Per-task hardware stacks
-- Tick-based task delays
-- Automatic timed wake-up
 - Semaphore synchronization
 - Mutex synchronization
 - Message queues
@@ -908,7 +1041,9 @@ At the current Day 6 development stage, it does not yet implement:
 - Priority inheritance
 - Dynamic memory management
 
-The current scheduler and System Tick are host-side simulations intended to demonstrate fundamental RTOS scheduling, timing, and task-state concepts.
+The current scheduler, System Tick, task delays, and priority scheduling are host-side simulations intended to demonstrate fundamental RTOS concepts.
+
+The current strict priority scheduler will repeatedly select the highest-priority READY task. Therefore, lower-priority tasks may experience starvation if a higher-priority task remains continuously READY. Future improvements could introduce task blocking, delays, time slicing, or priority aging to address this behavior.
 
 ---
 
@@ -950,7 +1085,7 @@ This would transform the current educational scheduler simulation into a more ha
 
 # 🎯 Learning Outcomes
 
-Through the first six development stages, the following concepts have been explored:
+Through the first eight development stages, the following concepts have been explored:
 
 - RTOS kernel architecture
 - Modular C project organization
@@ -968,15 +1103,21 @@ Through the first six development stages, the following concepts have been explo
 - Task suspension and resumption
 - Cooperative scheduling
 - Round-Robin scheduling
+- Priority-based scheduling
+- Scheduler policy selection
+- Highest-priority task selection
 - Scheduler task selection
 - State-aware task scheduling
 - System Tick architecture
 - Kernel tick management
 - Simulated kernel time base
+- Tick-based task delays
+- Wake tick management
+- Automatic delayed-task wake-up
 - Embedded software abstraction
 - GCC-based C development
 
-Future development will expand these concepts into tick-based delays, priority scheduling, context management, synchronization, and inter-task communication.
+Future development will expand these concepts into context management, synchronization, inter-task communication, full system integration, and testing.
 
 ---
 
@@ -984,13 +1125,17 @@ Future development will expand these concepts into tick-based delays, priority s
 
 MiniRTOS is designed as an educational implementation for understanding RTOS internals.
 
-The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management, scheduling, kernel timing, and task state transitions but does not currently perform hardware-level context switching on an ARM Cortex-M processor.
+The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management, multiple scheduling policies, kernel timing, delayed tasks, automatic wake-up, and task state transitions.
+
+It does not currently perform hardware-level context switching on an ARM Cortex-M processor.
 
 The System Tick implementation is simulated in software and advances during scheduler execution rather than being generated by a physical hardware timer interrupt.
 
-Task state transitions are also simulated through the MiniRTOS Task Manager. The scheduler checks task states and only selects eligible `READY` tasks.
+Task state transitions and delayed-task wake-ups are managed by the MiniRTOS Task Manager. The scheduler checks task states and only selects eligible `READY` tasks.
 
-Future development stages will introduce additional RTOS concepts while maintaining a modular architecture suitable for exploring a potential Cortex-M port.
+The scheduler currently supports both **Round-Robin** and **Priority-Based** scheduling policies.
+
+Future development stages will introduce context management and IPC mechanisms while maintaining a modular architecture suitable for exploring a potential Cortex-M port.
 
 ---
 
@@ -1026,6 +1171,6 @@ The project follows a structured 14-day development roadmap, progressively intro
 
 **Building RTOS concepts from scratch in C — one subsystem at a time.**
 
-### Current Progress: Day 6 / 14 ✅
+### Current Progress: Day 8 / 14 ✅
 
 </div>
