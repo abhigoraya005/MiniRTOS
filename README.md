@@ -1069,12 +1069,12 @@ Run on Windows PowerShell:
 | Day 8 | Priority-based scheduling | ✅ Completed |
 | Day 9 | Context management simulation and Cortex-M port abstraction | ✅ Completed |
 | Day 10 | Semaphore implementation and synchronization | ✅ Completed |
-| Day 11 | Mutex implementation | ⏳ Upcoming |
+| Day 11 | Mutex implementation | ✅ Completed |
 | Day 12 | FIFO message queue | ⏳ Upcoming |
 | Day 13 | Full kernel and IPC integration | ⏳ Upcoming |
 | Day 14 | Unit testing, build setup and documentation | ⏳ Upcoming |
 
-> **Current Progress: Day 10 of 14 — Semaphore Synchronization implemented.**
+> **Current Progress: Day 11 of 14 — Mutex Synchronization implemented.**
 
 ---
 
@@ -1094,13 +1094,13 @@ Priority Scheduling          ██████████ 100%  ✅
 Context Simulation           ██████████ 100%  ✅
 Cortex-M Port Layer          ██████████ 100%  ✅
 Semaphore                    ██████████ 100%  ✅
-Mutex                        ░░░░░░░░░░   0%  ⏳
+Mutex                        ██████████ 100%  ✅
 Message Queue                ░░░░░░░░░░   0%  ⏳
 Integration Demo             ░░░░░░░░░░   0%  ⏳
 Unit Testing                 ░░░░░░░░░░   0%  ⏳
 ```
 
-**Development Roadmap: 10 / 14 Days Completed**
+**Development Roadmap: 11 / 14 Days Completed**
 
 ---
 
@@ -1131,7 +1131,7 @@ Potential future improvements include:
 
 MiniRTOS is currently an educational **host-side RTOS kernel simulation**.
 
-At the current Day 10 development stage, it does not yet implement:
+At the current Day 11  development stage, it does not yet implement:
 
 - Hardware-based context switching
 - Actual ARM Cortex-M register save/restore
@@ -1200,7 +1200,7 @@ This would transform the current educational scheduler simulation into a more ha
 
 # 🎯 Learning Outcomes
 
-Through the first ten development stages, the following concepts have been explored:
+Through the first eleven development stages, the following concepts have been explored:
 
 - RTOS kernel architecture
 - Modular C project organization
@@ -1301,6 +1301,6 @@ By implementing these mechanisms individually, the project aims to build a stron
 
 **Building RTOS concepts from scratch in C — one subsystem at a time.**
 
-### Current Progress: Day 10 / 14 ✅
+### Current Progress: Day 11 / 14 ✅
 
 </div>
