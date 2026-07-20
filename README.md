@@ -9,13 +9,13 @@
 ![Platform](https://img.shields.io/badge/Platform-Host%20Simulation-lightgrey)
 ![Architecture](https://img.shields.io/badge/Target-Cortex--M-green)
 ![Status](https://img.shields.io/badge/Status-In%20Development-orange)
-![Progress](https://img.shields.io/badge/Progress-Day%2010%20of%2014-blue)
+![Progress](https://img.shields.io/badge/Progress-Day%2012%20of%2014-blue)
 
 **MiniRTOS** is a lightweight Real-Time Operating System kernel and task scheduling simulator being developed from scratch in C to explore the internal concepts behind embedded RTOS architectures.
 
 The project is being developed through a structured **14-day development roadmap**.
 
-The current GitHub version has completed **Day 10**, covering kernel initialization, Task Control Blocks, dynamic task registration, Round-Robin scheduling, simulated System Tick management, task state management, tick-based task delays, automatic task wake-up, priority-based scheduling, simulated context management, a Cortex-M-oriented port abstraction, and semaphore-based synchronization.
+The current GitHub version has completed **Day 12**, covering kernel initialization, Task Control Blocks, dynamic task registration, Round-Robin scheduling, simulated System Tick management, task state management, tick-based task delays, automatic task wake-up, priority-based scheduling, simulated context management, a Cortex-M-oriented port abstraction, semaphore-based synchronization, mutex-based mutual exclusion, and FIFO message queues for inter-task communication.
 
 </div>
 
@@ -60,6 +60,16 @@ The project currently demonstrates:
 - Semaphore acquire and release operations
 - Counting semaphore support
 - Shared-resource synchronization simulation
+- Mutex initialization
+- Mutex lock and unlock operations
+- Mutex ownership tracking
+- Shared-resource mutual exclusion
+- FIFO message queue initialization
+- Message send and receive operations
+- Queue empty and full detection
+- FIFO data ordering
+- Producer-consumer communication
+- Inter-task communication
 
 The current implementation runs as a **host-side simulation using GCC** while maintaining a modular architecture designed around embedded RTOS concepts.
 
@@ -75,9 +85,10 @@ The current implementation runs as a **host-side simulation using GCC** while ma
           ▼                 ▼                 ▼
         Kernel             Port              IPC
           │                 │                 │
-          │                 ▼                 ▼
-          │          Context Manager      Semaphore
-          │                 │
+          │                 ▼        ┌────────┼────────┐
+          │          Context Manager │        │        │
+          │                 │        ▼        ▼        ▼
+          │                 │    Semaphore  Mutex    Queue
           │                 ▼
           │          Cortex-M Port
           │
@@ -108,22 +119,22 @@ Manager
                      Idle
 ```
 
-As development progresses, the IPC architecture will be extended with:
+Current IPC architecture:
 
 ```text
 IPC
  │
  ├── Semaphore       ✅
  │
- ├── Mutex           ⏳
+ ├── Mutex           ✅
  │
- └── Message Queue   ⏳
+ └── Message Queue   ✅
         │
         ▼
-Full System Integration
+Full System Integration  ⏳
         │
         ▼
-Unit Testing
+Unit Testing             ⏳
 ```
 
 ---
@@ -236,25 +247,21 @@ Task ID       : 1
 Task Name     : Sensor
 Priority      : 3
 State         : READY
-Stack Pointer : 0000000000000000
 ---------------------------------
 Task ID       : 2
 Task Name     : Processing
 Priority      : 2
 State         : READY
-Stack Pointer : 0000000000000000
 ---------------------------------
 Task ID       : 3
 Task Name     : Logger
 Priority      : 1
 State         : READY
-Stack Pointer : 0000000000000000
 ---------------------------------
 Task ID       : 4
 Task Name     : Idle
 Priority      : 0
 State         : READY
-Stack Pointer : 0000000000000000
 ---------------------------------
 Total Tasks: 4 / 8
 =================================
@@ -326,21 +333,6 @@ Execute Sensor Task
 
 In the current cooperative simulation, if the highest-priority task remains READY after execution, it can be selected again during the next scheduling cycle.
 
-Example:
-
-```text
-[DAY 8 TEST] Enabling Priority-Based Scheduler...
-[SCHEDULER] Policy changed to PRIORITY.
-
-[SCHEDULER] Cycle 1
-[TICK] 1
-[SCHEDULER] Running Task 1: Sensor (Priority 3)
-
-[SCHEDULER] Cycle 2
-[TICK] 2
-[SCHEDULER] Running Task 1: Sensor (Priority 3)
-```
-
 This demonstrates strict priority selection among READY tasks.
 
 ---
@@ -387,19 +379,11 @@ Conceptually:
                  Run Task
 ```
 
-This architecture allows MiniRTOS to support multiple scheduling strategies through a common scheduler interface.
-
 ---
 
 # ⏱️ System Tick
 
 Day 5 introduced a simulated **System Tick** that provides a basic time reference for the MiniRTOS kernel.
-
-The System Tick module is initialized during system startup:
-
-```text
-[SYSTICK] System tick initialized.
-```
 
 During scheduler execution, the tick counter advances with each scheduling cycle.
 
@@ -411,9 +395,6 @@ Example:
 
 [SCHEDULER] Cycle 2
 [TICK] 2
-
-[SCHEDULER] Cycle 3
-[TICK] 3
 ```
 
 Conceptually:
@@ -456,57 +437,13 @@ BLOCKED
 SUSPENDED
 ```
 
-These states allow the kernel and scheduler to control whether a task is eligible for execution.
+A task in the `READY` state is available for scheduling.
 
-## 🟢 READY
+A selected task temporarily enters the `RUNNING` state.
 
-A task in the `READY` state is available for execution.
+A `BLOCKED` task is unavailable for scheduling until it becomes READY.
 
-```text
-Task State: READY
-      │
-      ▼
-Eligible for Scheduling
-```
-
-## 🔵 RUNNING
-
-A task selected by the scheduler is temporarily moved to the `RUNNING` state while its task function executes.
-
-```text
-READY
-  │
-  ▼
-RUNNING
-  │
-  ▼
-Task Function Executes
-  │
-  ▼
-READY
-```
-
-Because the current implementation is a cooperative host simulation, the task returns to `READY` after its function completes.
-
-## 🟠 BLOCKED
-
-A task in the `BLOCKED` state is temporarily unavailable for scheduling.
-
-Blocked tasks are skipped by the scheduler.
-
-A task may be manually blocked or temporarily blocked as part of the tick-based delay mechanism.
-
-## 🔴 SUSPENDED
-
-A task can also be placed into the `SUSPENDED` state.
-
-Suspended tasks are not selected by the scheduler until explicitly resumed.
-
----
-
-# 🔄 Task State Operations
-
-MiniRTOS supports task management operations for controlling task execution.
+A `SUSPENDED` task remains unavailable until explicitly resumed.
 
 Supported operations include:
 
@@ -518,15 +455,6 @@ Resume Task
 Delay Task
 Automatic Wake-Up
 ```
-
-Example:
-
-```c
-MiniRTOS_BlockTask(2);
-MiniRTOS_SuspendTask(3);
-```
-
-The scheduler automatically skips unavailable tasks until they become READY again.
 
 ---
 
@@ -564,46 +492,13 @@ Wake Tick Reached?
       Task READY
 ```
 
-This provides the foundation for RTOS-style timing and periodic task execution.
-
----
-
-# ⏰ Automatic Task Wake-Up
-
-The scheduler checks delayed tasks as the System Tick advances.
-
-For example:
-
-```text
-[TASK MANAGER] Task 2 (Processing) delayed until Tick 4.
-```
-
-During scheduling:
-
-```text
-Tick 1 → Processing BLOCKED
-Tick 2 → Processing BLOCKED
-Tick 3 → Processing BLOCKED
-Tick 4 → Processing wakes up
-```
-
-Example output:
-
-```text
-[SCHEDULER] Cycle 4
-[TICK] 4
-[TASK MANAGER] Task 2 (Processing) woke up at Tick 4.
-```
-
-The task is returned to the `READY` state and becomes eligible for scheduling.
+The scheduler checks delayed tasks as the System Tick advances and automatically returns eligible tasks to the READY state.
 
 ---
 
 # 🔄 Context Management Simulation
 
 Day 9 introduced a simulated **Context Management layer**.
-
-The context manager represents the logical process that occurs when an RTOS switches execution from one task to another.
 
 In a real ARM Cortex-M RTOS, context switching involves saving and restoring processor registers and task stack pointers.
 
@@ -616,15 +511,6 @@ Example:
 [CONTEXT] Saving context of Task 1: Sensor
 [CONTEXT] Restoring context of Task 2: Processing
 [CONTEXT] Total Context Switches: 2
-```
-
-For the first scheduled task:
-
-```text
-[CONTEXT] ---- Context Switch ----
-[CONTEXT] No previous task context.
-[CONTEXT] Restoring context of Task 1: Sensor
-[CONTEXT] Total Context Switches: 1
 ```
 
 Conceptually:
@@ -645,37 +531,11 @@ Restore Next Context
 Execute Next Task
 ```
 
-The Cortex-M port abstraction provides a foundation for a future hardware-specific implementation.
-
----
-
-# 🔢 Context Switch Tracking
-
-MiniRTOS tracks simulated context switch events.
-
-Example:
-
-```text
-[CONTEXT] Total Context Switches: 8
-```
-
-The final application output can report:
-
-```text
-[SYSTEM] Total Simulated Context Switches: 8
-```
-
-This provides visibility into scheduler-driven task transitions.
-
-The current implementation simulates the logical context transition process rather than saving and restoring actual ARM Cortex-M CPU registers.
-
 ---
 
 # 🧩 Cortex-M Port Abstraction
 
-Day 9 also introduces a dedicated **Port layer**.
-
-The port layer separates architecture-dependent functionality from the main MiniRTOS kernel.
+Day 9 also introduced a dedicated **Port layer**.
 
 Current structure:
 
@@ -685,27 +545,11 @@ Port
 └── cortex_m_port.h
 ```
 
-The current port implementation provides a host-side simulation of context management.
+The port layer separates architecture-dependent functionality from the main MiniRTOS kernel.
 
-Conceptually:
+The current implementation provides host-side simulation of context management and creates a foundation for future Cortex-M hardware support.
 
-```text
-MiniRTOS Scheduler
-       │
-       ▼
-Cortex-M Port Interface
-       │
-       ▼
-Context Transition Simulation
-       │
-       ▼
-Save Previous Task
-       │
-       ▼
-Restore Next Task
-```
-
-In a future hardware port, this abstraction could be extended with:
+Potential future extensions include:
 
 ```text
 ARM Cortex-M Register Management
@@ -720,9 +564,7 @@ Hardware Context Switching
 
 # 🚦 Semaphore Synchronization
 
-Day 10 introduces **Semaphore Synchronization**.
-
-The semaphore module provides a synchronization primitive for controlling access to shared resources and coordinating task execution.
+Day 10 introduced **Semaphore Synchronization**.
 
 A semaphore maintains:
 
@@ -731,21 +573,11 @@ Current Count
 Maximum Count
 ```
 
-Example initialization:
+Example:
 
 ```text
 [SEMAPHORE] Initialized. Count: 1 / 1
-```
-
-A task can acquire the semaphore:
-
-```text
 [SEMAPHORE] Acquired. Count: 0 / 1
-```
-
-After accessing the protected resource, the task releases it:
-
-```text
 [SEMAPHORE] Released. Count: 1 / 1
 ```
 
@@ -769,85 +601,209 @@ Use Shared Resource
    │
    ▼
 Release Semaphore
-   │
-   ▼
-Count Incremented
 ```
 
 The current implementation demonstrates semaphore behavior in the cooperative host simulation.
 
 ---
 
-# 🧪 Day 10 Semaphore Test
+# 🔒 Mutex Synchronization
 
-The Day 10 demonstration uses a semaphore to synchronize access to a simulated shared resource.
+Day 11 introduced **Mutex-Based Synchronization** for protecting shared resources.
 
-The Sensor task requests the resource:
+Unlike a semaphore, the MiniRTOS mutex tracks the task that currently owns the lock.
+
+Example:
 
 ```text
-[TASK] Sensor requesting shared resource.
-[SEMAPHORE] Acquired. Count: 0 / 1
-[TASK] Sensor acquired shared resource.
-[TASK] Sensor reading simulated data.
-[SEMAPHORE] Released. Count: 1 / 1
+[MUTEX] Initialized. State: UNLOCKED
+[MUTEX] Task 1 acquired mutex.
+[MUTEX] Task 1 released mutex.
 ```
 
-The Processing task also accesses the shared resource:
+Conceptually:
 
 ```text
-[TASK] Processing requesting shared resource.
-[SEMAPHORE] Acquired. Count: 0 / 1
-[TASK] Processing acquired shared resource.
-[TASK] Processing simulated data.
-[SEMAPHORE] Released. Count: 1 / 1
-```
-
-The synchronization lifecycle is:
-
-```text
-Resource Available
-       │
-       ▼
-Semaphore Acquire
-       │
-       ▼
-Semaphore Count = 0
-       │
-       ▼
+Task Requests Resource
+        │
+        ▼
+    Check Mutex
+        │
+   ┌────┴─────┐
+   │          │
+UNLOCKED    LOCKED
+   │          │
+   ▼          ▼
+Acquire     Access Denied
+   │
+   ▼
+Set Task as Owner
+   │
+   ▼
 Critical Section
-       │
-       ▼
-Semaphore Release
-       │
-       ▼
-Semaphore Count = 1
-       │
-       ▼
-Resource Available
+   │
+   ▼
+Release Mutex
+   │
+   ▼
+Mutex UNLOCKED
 ```
 
-At the end of the test:
+The mutex provides mutual exclusion and ensures that only one task can own the protected resource at a time.
+
+The current implementation demonstrates mutex ownership and shared-resource protection within the cooperative host simulation.
+
+---
+
+# 📬 FIFO Message Queue
+
+Day 12 introduced a **FIFO Message Queue** for inter-task communication.
+
+The queue allows one task to send data that can later be received and processed by another task.
+
+The current queue supports a capacity of eight messages.
+
+Example initialization:
 
 ```text
-[SYSTEM] Final Semaphore Count: 1
-[SYSTEM] Final Kernel Tick: 8
-[SYSTEM] Total Simulated Context Switches: 8
+[QUEUE] Message queue initialized. Capacity: 8
 ```
 
-The final semaphore count confirms that the shared resource was correctly released after execution.
+A producer task can send a message:
+
+```text
+[QUEUE] Message sent: 25 | Messages: 1 / 8
+```
+
+A consumer task can receive the oldest available message:
+
+```text
+[QUEUE] Message received: 25 | Messages: 0 / 8
+```
+
+The queue follows **First-In, First-Out (FIFO)** ordering.
+
+Conceptually:
+
+```text
+Producer Task
+     │
+     ▼
+Generate Data
+     │
+     ▼
+Send Message
+     │
+     ▼
+┌───────────────┐
+│ Message Queue │
+│   FIFO Order  │
+└───────────────┘
+     │
+     ▼
+Receive Message
+     │
+     ▼
+Consumer Task
+     │
+     ▼
+Process Data
+```
+
+The queue module currently supports:
+
+```text
+Queue Initialization
+Message Send
+Message Receive
+Message Count
+Empty Detection
+Full Detection
+FIFO Data Ordering
+```
+
+This provides the foundation for message-based inter-task communication in MiniRTOS.
+
+---
+
+# 🧪 Day 12 Message Queue Test
+
+The Day 12 demonstration uses the Sensor task as a producer and the Processing task as a consumer.
+
+The Sensor task generates data:
+
+```text
+[TASK] Sensor generated value: 25
+[QUEUE] Message sent: 25 | Messages: 1 / 8
+[TASK] Sensor successfully queued data.
+```
+
+The Processing task receives and processes the queued value:
+
+```text
+[TASK] Processing checking message queue.
+[QUEUE] Message received: 25 | Messages: 0 / 8
+[TASK] Processing received value: 25
+[TASK] Processed result: 50
+```
+
+Additional messages demonstrate continued communication:
+
+```text
+Sensor: 30 → Processing Result: 60
+Sensor: 35 → Processing Result: 70
+```
+
+The data flow is:
+
+```text
+Sensor Task
+    │
+    ▼
+Generate Value
+    │
+    ▼
+Queue Send
+    │
+    ▼
+FIFO Message Queue
+    │
+    ▼
+Queue Receive
+    │
+    ▼
+Processing Task
+    │
+    ▼
+Process Value
+```
+
+At the end of the Day 12 test:
+
+```text
+[SYSTEM] Messages Remaining in Queue: 0
+[SYSTEM] Queue Empty: YES
+[SYSTEM] Queue Full: NO
+[SYSTEM] Final Kernel Tick: 12
+
+[SYSTEM] MiniRTOS Day 12 Message Queue demo completed.
+```
+
+This confirms successful FIFO message transfer between simulated MiniRTOS tasks.
 
 ---
 
 # 🧪 Current Demo Application
 
-The MiniRTOS demo application contains four simulated tasks.
+The MiniRTOS Day 12 demo application contains four simulated tasks.
 
 ## Sensor Task
 
+The Sensor task acts as the message producer.
+
 ```text
-[TASK] Sensor requesting shared resource.
-[TASK] Sensor acquired shared resource.
-[TASK] Sensor reading simulated data.
+[TASK] Sensor generated value: 25
+[QUEUE] Message sent: 25
 ```
 
 Priority:
@@ -858,10 +814,12 @@ Priority:
 
 ## Processing Task
 
+The Processing task acts as the message consumer.
+
 ```text
-[TASK] Processing requesting shared resource.
-[TASK] Processing acquired shared resource.
-[TASK] Processing simulated data.
+[TASK] Processing checking message queue.
+[QUEUE] Message received: 25
+[TASK] Processed result: 50
 ```
 
 Priority:
@@ -872,8 +830,10 @@ Priority:
 
 ## Logger Task
 
+The Logger task reports the current message queue state.
+
 ```text
-[TASK] Logging system information.
+[TASK] Queue currently contains 0 message(s).
 ```
 
 Priority:
@@ -899,67 +859,51 @@ Priority:
 # 🔄 Current System Flow
 
 ```text
-                 MiniRTOS Kernel
-                       │
-                       ▼
-                 Task Manager
-                       │
-                       ▼
-                Register Tasks
-                       │
-                       ▼
-                 System Tick
-                       │
-                       ▼
-             Update Delayed Tasks
-                       │
-                       ▼
-              Automatic Wake-Up
-                       │
-                       ▼
-                  Scheduler
-                       │
-                       ▼
-              Check Scheduler Policy
-                       │
-             ┌─────────┴─────────┐
-             │                   │
-             ▼                   ▼
-        Round Robin           Priority
-             │                   │
-             ▼                   ▼
-       Next READY Task    Highest-Priority
-                              READY Task
-             │                   │
-             └─────────┬─────────┘
-                       │
-                       ▼
-               Context Manager
-                       │
-                       ▼
-               Save / Restore
-                       │
-                       ▼
-                  Task RUNNING
-                       │
-                       ▼
-             Semaphore Acquire
-                       │
-                       ▼
-               Shared Resource
-                       │
-                       ▼
-             Semaphore Release
-                       │
-                       ▼
-                   Task READY
+                  MiniRTOS Kernel
+                        │
+                        ▼
+                  Task Manager
+                        │
+                        ▼
+                 Register Tasks
+                        │
+                        ▼
+                  System Tick
+                        │
+                        ▼
+              Update Delayed Tasks
+                        │
+                        ▼
+                   Scheduler
+                        │
+              ┌─────────┴─────────┐
+              │                   │
+              ▼                   ▼
+         Round Robin           Priority
+              │                   │
+              └─────────┬─────────┘
+                        │
+                        ▼
+                Context Manager
+                        │
+                        ▼
+                Selected Task
+                        │
+          ┌─────────────┼─────────────┐
+          │             │             │
+          ▼             ▼             ▼
+      Semaphore       Mutex         Queue
+          │             │             │
+          ▼             ▼             ▼
+  Synchronization   Mutual       Inter-Task
+                    Exclusion    Communication
 ```
 
 ---
 
 # 📂 Current Project Structure
 
-The public GitHub repository currently contains the components developed through **Day 10**.
+The public GitHub repository currently contains the components developed through **Day 12**.
 
 ```text
 MiniRTOS
@@ -980,7 +924,11 @@ MiniRTOS
 │
 ├── IPC
 │   ├── semaphore.c
-│   └── semaphore.h
+│   ├── semaphore.h
+│   ├── mutex.c
+│   ├── mutex.h
+│   ├── queue.c
+│   └── queue.h
 │
 ├── Demo
 │   └── main.c
@@ -993,12 +941,6 @@ The planned final architecture will additionally include:
 
 ```text
 MiniRTOS
-│
-├── IPC
-│   ├── mutex.c
-│   ├── mutex.h
-│   ├── queue.c
-│   └── queue.h
 │
 ├── Tests
 │   └── test_queue.c
@@ -1037,14 +979,12 @@ Verify GCC installation:
 gcc --version
 ```
 
----
-
-## Compile Current MiniRTOS Version
+## Compile Day 12 MiniRTOS Version
 
 From the project root directory:
 
 ```bash
-gcc -Wall -Wextra Demo/main.c Kernel/minirtos.c Kernel/task.c Kernel/scheduler.c Kernel/systick.c Port/cortex_m_port.c IPC/semaphore.c -o MiniRTOS.exe
+gcc -Wall -Wextra Demo/main.c Kernel/minirtos.c Kernel/task.c Kernel/scheduler.c Kernel/systick.c Port/cortex_m_port.c IPC/queue.c -o MiniRTOS.exe
 ```
 
 Run on Windows PowerShell:
@@ -1069,12 +1009,12 @@ Run on Windows PowerShell:
 | Day 8 | Priority-based scheduling | ✅ Completed |
 | Day 9 | Context management simulation and Cortex-M port abstraction | ✅ Completed |
 | Day 10 | Semaphore implementation and synchronization | ✅ Completed |
-| Day 11 | Mutex implementation | ✅ Completed |
-| Day 12 | FIFO message queue | ⏳ Upcoming |
+| Day 11 | Mutex implementation and shared resource protection | ✅ Completed |
+| Day 12 | FIFO message queue and inter-task communication | ✅ Completed |
 | Day 13 | Full kernel and IPC integration | ⏳ Upcoming |
 | Day 14 | Unit testing, build setup and documentation | ⏳ Upcoming |
 
-> **Current Progress: Day 11 of 14 — Mutex Synchronization implemented.**
+> **Current Progress: Day 12 of 14 — FIFO Message Queue and inter-task communication implemented.**
 
 ---
 
@@ -1095,12 +1035,12 @@ Context Simulation           ██████████ 100%  ✅
 Cortex-M Port Layer          ██████████ 100%  ✅
 Semaphore                    ██████████ 100%  ✅
 Mutex                        ██████████ 100%  ✅
-Message Queue                ░░░░░░░░░░   0%  ⏳
+Message Queue                ██████████ 100%  ✅
 Integration Demo             ░░░░░░░░░░   0%  ⏳
 Unit Testing                 ░░░░░░░░░░   0%  ⏳
 ```
 
-**Development Roadmap: 11 / 14 Days Completed**
+**Development Roadmap: 12 / 14 Days Completed**
 
 ---
 
@@ -1108,9 +1048,6 @@ Unit Testing                 ░░░░░░░░░░   0%  ⏳
 
 The following features are planned for upcoming development stages:
 
-- Mutex-based shared resource protection
-- FIFO message queues
-- Inter-task communication
 - Full kernel and IPC integration
 - Unit testing
 - Build automation
@@ -1124,6 +1061,8 @@ Potential future improvements include:
 - Preemptive scheduling
 - Priority inheritance
 - Dynamic memory management
+- Blocking queue operations
+- Task wait queues
 
 ---
 
@@ -1131,7 +1070,7 @@ Potential future improvements include:
 
 MiniRTOS is currently an educational **host-side RTOS kernel simulation**.
 
-At the current Day 11  development stage, it does not yet implement:
+At the current Day 12 development stage, it does not yet implement:
 
 - Hardware-based context switching
 - Actual ARM Cortex-M register save/restore
@@ -1139,15 +1078,18 @@ At the current Day 11  development stage, it does not yet implement:
 - Hardware SysTick interrupts
 - Preemptive multitasking
 - Per-task hardware stacks
-- Mutex synchronization
-- Message queues
 - Hardware interrupt handling
 - Priority inheritance
 - Dynamic memory management
+- Automatic IPC task blocking and wake-up
 
 The current context manager simulates task context transitions but does not save or restore physical processor registers.
 
-The current semaphore implementation demonstrates synchronization semantics within a sequential cooperative host simulation. It does not yet implement a waiting-task queue or automatically block and wake tasks when semaphore acquisition fails.
+The semaphore implementation demonstrates synchronization semantics within a sequential cooperative host simulation. It does not yet implement a waiting-task queue or automatically block and wake tasks when semaphore acquisition fails.
+
+The mutex implementation demonstrates mutual exclusion and ownership tracking within the cooperative host simulation. It does not yet implement advanced RTOS mutex mechanisms such as priority inheritance or automatic task blocking and wake-up queues.
+
+The message queue uses a fixed-size FIFO buffer and demonstrates basic inter-task data transfer. It does not automatically block producer or consumer tasks when the queue is full or empty.
 
 The strict priority scheduler can repeatedly select the highest-priority READY task. Therefore, lower-priority tasks may experience starvation if a higher-priority task remains continuously READY.
 
@@ -1200,7 +1142,7 @@ This would transform the current educational scheduler simulation into a more ha
 
 # 🎯 Learning Outcomes
 
-Through the first eleven development stages, the following concepts have been explored:
+Through the first twelve development stages, the following concepts have been explored:
 
 - RTOS kernel architecture
 - Modular C project organization
@@ -1210,23 +1152,17 @@ Through the first eleven development stages, the following concepts have been ex
 - Task function pointers
 - Task priorities
 - Task state representation
-- READY state
-- RUNNING state
-- BLOCKED state
-- SUSPENDED state
+- READY, RUNNING, BLOCKED, and SUSPENDED states
 - Task blocking and unblocking
 - Task suspension and resumption
 - Cooperative scheduling
 - Round-Robin scheduling
 - Priority-based scheduling
 - Scheduler policy selection
-- Highest-priority task selection
 - State-aware task scheduling
 - System Tick architecture
 - Kernel tick management
-- Simulated kernel time base
 - Tick-based task delays
-- Wake tick management
 - Automatic delayed-task wake-up
 - Context management concepts
 - Context save and restore simulation
@@ -1234,14 +1170,23 @@ Through the first eleven development stages, the following concepts have been ex
 - Cortex-M port abstraction
 - Architecture-dependent port layers
 - Semaphore fundamentals
-- Semaphore acquisition
-- Semaphore release
+- Semaphore acquisition and release
 - Counting semaphore concepts
 - Shared-resource synchronization
+- Mutex fundamentals
+- Mutual exclusion
+- Mutex ownership tracking
+- Critical section protection
+- FIFO message queues
+- Producer-consumer communication
+- Inter-task communication
+- Queue send and receive operations
+- Queue empty and full detection
+- FIFO data integrity
 - Embedded software abstraction
 - GCC-based C development
 
-Future development will expand these concepts into mutex synchronization, inter-task communication, full system integration, and unit testing.
+Future development will expand these concepts into full kernel and IPC integration, automated testing, build automation, and project documentation.
 
 ---
 
@@ -1249,21 +1194,25 @@ Future development will expand these concepts into mutex synchronization, inter-
 
 MiniRTOS is designed as an educational implementation for understanding RTOS internals.
 
-The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management, multiple scheduling policies, kernel timing, delayed tasks, automatic wake-up, task state transitions, context management, and semaphore synchronization.
+The current version is a **host-side simulation compiled using GCC**. It demonstrates the logical architecture of task management, multiple scheduling policies, kernel timing, delayed tasks, automatic wake-up, task state transitions, context management, synchronization, mutual exclusion, and inter-task communication.
 
 It does not currently perform hardware-level context switching on an ARM Cortex-M processor.
 
 The System Tick implementation is simulated in software and advances during scheduler execution rather than being generated by a physical hardware timer interrupt.
 
-Task state transitions and delayed-task wake-ups are managed by the MiniRTOS Task Manager. The scheduler checks task states and only selects eligible `READY` tasks.
+Task state transitions and delayed-task wake-ups are managed by the MiniRTOS Task Manager.
 
 The scheduler currently supports both **Round-Robin** and **Priority-Based** scheduling policies.
 
-The Cortex-M port layer currently provides a logical host-side abstraction for simulated context management.
+The Cortex-M port layer provides a logical host-side abstraction for simulated context management.
 
-The semaphore implementation provides the first MiniRTOS IPC and synchronization mechanism.
+The semaphore module provides counting-based synchronization.
 
-Future development stages will introduce mutexes, message queues, complete IPC integration, and unit testing while maintaining a modular architecture suitable for exploring a future Cortex-M hardware port.
+The mutex module provides ownership-based mutual exclusion for shared resources.
+
+The FIFO message queue provides basic producer-consumer inter-task communication.
+
+The next development stage will integrate the kernel, scheduler, port layer, semaphore, mutex, and message queue into a complete MiniRTOS demonstration.
 
 ---
 
@@ -1289,7 +1238,7 @@ Dr. B.R. Ambedkar National Institute of Technology, Jalandhar
 
 MiniRTOS was started to move beyond simply using existing RTOS APIs and instead explore how fundamental operating-system mechanisms can be designed from the ground up.
 
-The project follows a structured 14-day development roadmap, progressively introducing task management, scheduling, timing, context management, synchronization, inter-task communication, and RTOS architecture concepts.
+The project follows a structured 14-day development roadmap, progressively introducing task management, scheduling, timing, context management, synchronization, mutual exclusion, inter-task communication, integration, and testing.
 
 By implementing these mechanisms individually, the project aims to build a stronger understanding of the software architecture underlying embedded Real-Time Operating Systems.
 
@@ -1301,6 +1250,6 @@ By implementing these mechanisms individually, the project aims to build a stron
 
 **Building RTOS concepts from scratch in C — one subsystem at a time.**
 
-### Current Progress: Day 11 / 14 ✅
+### Current Progress: Day 12 / 14 ✅
 
 </div>
