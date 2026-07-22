@@ -1,7 +1,0 @@
-[33mf3febc0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m docs: update README for Day 5 progress
-[33m67b0f32[m Day 5: Integrate System Tick management
-[33m3b89117[m docs: update README for Day 4 progress
-[33mc392888[m Day 4: Implement Round-Robin task scheduler
-[33m133aef1[m Day 2: Implement Task Control Block and task states
-[33m35898c5[m docs: add MiniRTOS project README
-[33m8dc8b42[m Day 1: Initialize MiniRTOS kernel architecture
