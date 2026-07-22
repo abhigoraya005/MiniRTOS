@@ -1484,7 +1484,7 @@ By implementing these mechanisms individually and then integrating them into a c
 
 **Building RTOS concepts from scratch in C — one subsystem at a time.**
 
-### Current Progress: Day 13 / 14 ✅
+### Current Progress: Day 14 / 14 ✅
 
 
 </div>
